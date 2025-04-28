@@ -1,0 +1,919 @@
+{
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "gSpnWBP5ELSI"
+      },
+      "source": [
+        "# 実践演習 Day 1：streamlitとFastAPIのデモ\n",
+        "このノートブックでは以下の内容を学習します。\n",
+        "\n",
+        "- 必要なライブラリのインストールと環境設定\n",
+        "- Hugging Faceからモデルを用いたStreamlitのデモアプリ\n",
+        "- FastAPIとngrokを使用したAPIの公開方法\n",
+        "\n",
+        "演習を始める前に、HuggingFaceとngrokのアカウントを作成し、\n",
+        "それぞれのAPIトークンを取得する必要があります。\n",
+        "\n",
+        "\n",
+        "演習の時間では、以下の3つのディレクトリを順に説明します。\n",
+        "\n",
+        "1. 01_streamlit_UI\n",
+        "2. 02_streamlit_app\n",
+        "3. 03_FastAPI\n",
+        "\n",
+        "2つ目や3つ目からでも始められる様にノートブックを作成しています。\n",
+        "\n",
+        "復習の際にもこのノートブックを役立てていただければと思います。\n",
+        "\n",
+        "### 注意事項\n",
+        "「02_streamlit_app」と「03_FastAPI」では、GPUを使用します。\n",
+        "\n",
+        "これらを実行する際は、Google Colab画面上のメニューから「編集」→ 「ノートブックの設定」\n",
+        "\n",
+        "「ハードウェアアクセラレーター」の項目の中から、「T4 GPU」を選択してください。\n",
+        "\n",
+        "このノートブックのデフォルトは「CPU」になっています。\n",
+        "\n",
+        "---"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "OhtHkJOgELSL"
+      },
+      "source": [
+        "# 環境変数の設定（1~3共有）\n"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "Y-FjBp4MMQHM"
+      },
+      "source": [
+        "GitHubから演習用のコードをCloneします。"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 1,
+      "metadata": {
+        "id": "AIXMavdDEP8U",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "outputId": "2f1428de-65b8-450f-e2a5-084910d13e5a"
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Cloning into 'lecture-ai-engineering'...\n",
+            "remote: Enumerating objects: 41, done.\u001b[K\n",
+            "remote: Counting objects: 100% (33/33), done.\u001b[K\n",
+            "remote: Compressing objects: 100% (29/29), done.\u001b[K\n",
+            "remote: Total 41 (delta 7), reused 4 (delta 4), pack-reused 8 (from 1)\u001b[K\n",
+            "Receiving objects: 100% (41/41), 34.03 KiB | 11.34 MiB/s, done.\n",
+            "Resolving deltas: 100% (7/7), done.\n"
+          ]
+        }
+      ],
+      "source": [
+        "!git clone https://github.com/koheitada/lecture-ai-engineering.git"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "XC8n7yZ_vs1K"
+      },
+      "source": [
+        "必要なAPIトークンを.envに設定します。\n",
+        "\n",
+        "「lecture-ai-engineering/day1」の配下に、「.env_template」ファイルが存在しています。\n",
+        "\n",
+        "隠しファイルのため表示されていない場合は、画面左側のある、目のアイコンの「隠しファイルの表示」ボタンを押してください。\n",
+        "\n",
+        "「.env_template」のファイル名を「.env」に変更します。「.env」ファイルを開くと、以下のような中身になっています。\n",
+        "\n",
+        "\n",
+        "```\n",
+        "HUGGINGFACE_TOKEN=\"hf-********\"\n",
+        "NGROK_TOKEN=\"********\"\n",
+        "```\n",
+        "ダブルクオーテーションで囲まれた文字列をHuggingfaceのアクセストークンと、ngrokの認証トークンで書き変えてください。\n",
+        "\n",
+        "それぞれのアカウントが作成済みであれば、以下のURLからそれぞれのトークンを取得できます。\n",
+        "\n",
+        "- Huggingfaceのアクセストークン\n",
+        "https://huggingface.co/docs/hub/security-tokens\n",
+        "\n",
+        "- ngrokの認証トークン\n",
+        "https://dashboard.ngrok.com/get-started/your-authtoken\n",
+        "\n",
+        "書き換えたら、「.env」ファイルをローカルのPCにダウンロードしてください。\n",
+        "\n",
+        "「01_streamlit_UI」から「02_streamlit_app」へ進む際に、CPUからGPUの利用に切り替えるため、セッションが一度切れてしまいます。\n",
+        "\n",
+        "その際に、トークンを設定した「.env」ファイルは再作成することになるので、その手間を減らすために「.env」ファイルをダウンロードしておくと良いです。"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "Py1BFS5RqcSS"
+      },
+      "source": [
+        "「.env」ファイルを読み込み、環境変数として設定します。次のセルを実行し、最終的に「True」が表示されていればうまく読み込めています。"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [],
+      "metadata": {
+        "id": "Nx85K6j7wXGS"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 1,
+      "metadata": {
+        "id": "bvEowFfg5lrq",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "outputId": "7eba8e93-cf62-4944-f19b-edc6ac3e088e"
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Requirement already satisfied: python-dotenv in /usr/local/lib/python3.11/dist-packages (1.1.0)\n",
+            "/content/lecture-ai-engineering/day1\n"
+          ]
+        },
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "True"
+            ]
+          },
+          "metadata": {},
+          "execution_count": 1
+        }
+      ],
+      "source": [
+        "!pip install python-dotenv\n",
+        "from dotenv import load_dotenv, find_dotenv\n",
+        "\n",
+        "%cd /content/lecture-ai-engineering/day1\n",
+        "load_dotenv(find_dotenv())"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "os0Yk6gaELSM"
+      },
+      "source": [
+        "# 01_streamlit_UI\n",
+        "\n",
+        "ディレクトリ「01_streamlit_UI」に移動します。"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 2,
+      "metadata": {
+        "id": "S28XgOm0ELSM",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "outputId": "2c640b56-cfae-4412-f742-f85f5e530dc5"
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "/content/lecture-ai-engineering/day1/01_streamlit_UI\n"
+          ]
+        }
+      ],
+      "source": [
+        "%cd /content/lecture-ai-engineering/day1/01_streamlit_UI"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "eVp-aEIkELSM"
+      },
+      "source": [
+        "必要なライブラリをインストールします。"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 4,
+      "metadata": {
+        "id": "nBe41LFiELSN"
+      },
+      "outputs": [],
+      "source": [
+        "%%capture\n",
+        "!pip install -r requirements.txt"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "Yyw6VHaTELSN"
+      },
+      "source": [
+        "ngrokのトークンを使用して、認証を行います。"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 5,
+      "metadata": {
+        "id": "aYw1q0iXELSN",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "outputId": "8c55e5cd-14a3-47f6-cda7-81395425c17c"
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Authtoken saved to configuration file: /root/.config/ngrok/ngrok.yml\n"
+          ]
+        }
+      ],
+      "source": [
+        "!ngrok authtoken $$NGROK_TOKEN"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "RssTcD_IELSN"
+      },
+      "source": [
+        "アプリを起動します。"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "f-E7ucR6ELSN",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "outputId": "d20b4522-0094-455f-9782-ad09d9526099"
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "公開URL: https://a816-34-87-67-32.ngrok-free.app\n",
+            "\n",
+            "Collecting usage statistics. To deactivate, set browser.gatherUsageStats to false.\n",
+            "\u001b[0m\n",
+            "\u001b[0m\n",
+            "\u001b[34m\u001b[1m  You can now view your Streamlit app in your browser.\u001b[0m\n",
+            "\u001b[0m\n",
+            "\u001b[34m  Local URL: \u001b[0m\u001b[1mhttp://localhost:8501\u001b[0m\n",
+            "\u001b[34m  Network URL: \u001b[0m\u001b[1mhttp://172.28.0.12:8501\u001b[0m\n",
+            "\u001b[34m  External URL: \u001b[0m\u001b[1mhttp://34.87.67.32:8501\u001b[0m\n",
+            "\u001b[0m\n",
+            "\u001b[34m  Stopping...\u001b[0m\n",
+            "\u001b[34m  Stopping...\u001b[0m\n",
+            "Exception ignored in: <module 'threading' from '/usr/lib/python3.11/threading.py'>\n",
+            "Traceback (most recent call last):\n",
+            "  File \"/usr/lib/python3.11/threading.py\", line 1570, in _shutdown\n",
+            "    _main_thread._stop()\n",
+            "  File \"/usr/lib/python3.11/threading.py\", line 1076, in _stop\n",
+            "    _maintain_shutdown_locks()\n",
+            "  File \"/usr/lib/python3.11/threading.py\", line 829, in _maintain_shutdown_locks\n",
+            "    def _maintain_shutdown_locks():\n",
+            "    \n",
+            "  File \"/usr/local/lib/python3.11/dist-packages/streamlit/web/bootstrap.py\", line 44, in signal_handler\n",
+            "    server.stop()\n",
+            "  File \"/usr/local/lib/python3.11/dist-packages/streamlit/web/server/server.py\", line 470, in stop\n",
+            "    self._runtime.stop()\n",
+            "  File \"/usr/local/lib/python3.11/dist-packages/streamlit/runtime/runtime.py\", line 337, in stop\n",
+            "    async_objs.eventloop.call_soon_threadsafe(stop_on_eventloop)\n",
+            "  File \"/usr/lib/python3.11/asyncio/base_events.py\", line 807, in call_soon_threadsafe\n",
+            "    self._check_closed()\n",
+            "  File \"/usr/lib/python3.11/asyncio/base_events.py\", line 520, in _check_closed\n",
+            "    raise RuntimeError('Event loop is closed')\n",
+            "RuntimeError: Event loop is closed\n",
+            "^C\n"
+          ]
+        }
+      ],
+      "source": [
+        "from pyngrok import ngrok\n",
+        "\n",
+        "public_url = ngrok.connect(8501).public_url\n",
+        "print(f\"公開URL: {public_url}\")\n",
+        "!streamlit run app.py"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "kbYyXVFjELSN"
+      },
+      "source": [
+        "公開URLの後に記載されているURLにブラウザでアクセスすると、streamlitのUIが表示されます。\n",
+        "\n",
+        "app.pyのコメントアウトされている箇所を編集することで、UIがどの様に変化するか確認してみましょう。\n",
+        "\n",
+        "streamlitの公式ページには、ギャラリーページがあります。\n",
+        "\n",
+        "streamlitを使うとpythonという一つの言語であっても、様々なUIを実現できることがわかると思います。\n",
+        "\n",
+        "https://streamlit.io/gallery"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "MmtP5GLOELSN"
+      },
+      "source": [
+        "後片付けとして、使う必要のないngrokのトンネルを削除します。"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "8Ek9QgahELSO"
+      },
+      "outputs": [],
+      "source": [
+        "from pyngrok import ngrok\n",
+        "ngrok.kill()"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "o-T8tFpyELSO"
+      },
+      "source": [
+        "# 02_streamlit_app"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "QqogFQKnELSO"
+      },
+      "source": [
+        "\n",
+        "ディレクトリ「02_streamlit_app」に移動します。"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 3,
+      "metadata": {
+        "id": "UeEjlJ7uELSO",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "outputId": "74b105e9-ebaf-405a-b99c-d23d4551120b"
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "/content/lecture-ai-engineering/day1/02_streamlit_app\n"
+          ]
+        }
+      ],
+      "source": [
+        "%cd /content/lecture-ai-engineering/day1/02_streamlit_app"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "-XUH2AstELSO"
+      },
+      "source": [
+        "必要なライブラリをインストールします。"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 4,
+      "metadata": {
+        "id": "mDqvI4V3ELSO"
+      },
+      "outputs": [],
+      "source": [
+        "%%capture\n",
+        "!pip install -r requirements.txt"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "ZO31umGZELSO"
+      },
+      "source": [
+        "ngrokとhuggigfaceのトークンを使用して、認証を行います。"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 5,
+      "metadata": {
+        "id": "jPxTiEWQELSO",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "outputId": "419eb35e-1ee7-410f-8fdd-77f7ec688c90"
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Authtoken saved to configuration file: /root/.config/ngrok/ngrok.yml\n",
+            "The token has not been saved to the git credentials helper. Pass `add_to_git_credential=True` in this function directly or `--add-to-git-credential` if using via `huggingface-cli` if you want to set the git credential as well.\n",
+            "Token is valid (permission: read).\n",
+            "The token `aiengeer` has been saved to /root/.cache/huggingface/stored_tokens\n",
+            "Your token has been saved to /root/.cache/huggingface/token\n",
+            "Login successful.\n",
+            "The current active token is: `aiengeer`\n"
+          ]
+        }
+      ],
+      "source": [
+        "!ngrok authtoken $$NGROK_TOKEN\n",
+        "!huggingface-cli login --token $$HUGGINGFACE_TOKEN"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "dz4WrELLELSP"
+      },
+      "source": [
+        "stramlitでHuggingfaceのトークン情報を扱うために、streamlit用の設定ファイル（.streamlit）を作成し、トークンの情報を格納します。"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 6,
+      "metadata": {
+        "id": "W184-a7qFP0W"
+      },
+      "outputs": [],
+      "source": [
+        "# .streamlit/secrets.toml ファイルを作成\n",
+        "import os\n",
+        "import toml\n",
+        "\n",
+        "# 設定ファイルのディレクトリ確保\n",
+        "os.makedirs('.streamlit', exist_ok=True)\n",
+        "\n",
+        "# 環境変数から取得したトークンを設定ファイルに書き込む\n",
+        "secrets = {\n",
+        "    \"huggingface\": {\n",
+        "        \"token\": os.environ.get(\"HUGGINGFACE_TOKEN\", \"\")\n",
+        "    }\n",
+        "}\n",
+        "\n",
+        "# 設定ファイルを書き込む\n",
+        "with open('.streamlit/secrets.toml', 'w') as f:\n",
+        "    toml.dump(secrets, f)"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "fK0vI_xKELSP"
+      },
+      "source": [
+        "アプリを起動します。\n",
+        "\n",
+        "02_streamlit_appでは、Huggingfaceからモデルをダウンロードするため、初回起動には2分程度時間がかかります。\n",
+        "\n",
+        "この待ち時間を利用して、app.pyのコードを確認してみましょう。"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "TBQyTTWTELSP",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "outputId": "0f82eb62-37f0-4f65-f4af-c80e31122702"
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "公開URL: https://6f26-34-87-67-32.ngrok-free.app\n",
+            "\n",
+            "Collecting usage statistics. To deactivate, set browser.gatherUsageStats to false.\n",
+            "\u001b[0m\n",
+            "\u001b[0m\n",
+            "\u001b[34m\u001b[1m  You can now view your Streamlit app in your browser.\u001b[0m\n",
+            "\u001b[0m\n",
+            "\u001b[34m  Local URL: \u001b[0m\u001b[1mhttp://localhost:8501\u001b[0m\n",
+            "\u001b[34m  Network URL: \u001b[0m\u001b[1mhttp://172.28.0.12:8501\u001b[0m\n",
+            "\u001b[34m  External URL: \u001b[0m\u001b[1mhttp://34.87.67.32:8501\u001b[0m\n",
+            "\u001b[0m\n",
+            "NLTK loaded successfully.\n",
+            "2025-04-28 05:11:59.042047: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:477] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered\n",
+            "WARNING: All log messages before absl::InitializeLog() is called are written to STDERR\n",
+            "E0000 00:00:1745817119.315958    5012 cuda_dnn.cc:8310] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered\n",
+            "E0000 00:00:1745817119.390666    5012 cuda_blas.cc:1418] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered\n",
+            "2025-04-28 05:11:59.967047: I tensorflow/core/platform/cpu_feature_guard.cc:210] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.\n",
+            "To enable the following instructions: AVX2 AVX512F FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.\n",
+            "NLTK Punkt data checked/downloaded.\n",
+            "Database 'chat_feedback.db' initialized successfully.\n",
+            "Data saved to DB successfully.\n",
+            "Data saved to DB successfully.\n",
+            "Data saved to DB successfully.\n",
+            "Data saved to DB successfully.\n",
+            "Data saved to DB successfully.\n",
+            "Data saved to DB successfully.\n",
+            "Data saved to DB successfully.\n",
+            "Data saved to DB successfully.\n",
+            "Data saved to DB successfully.\n",
+            "Data saved to DB successfully.\n",
+            "2025-04-28 05:12:10.042 Examining the path of torch.classes raised:\n",
+            "Traceback (most recent call last):\n",
+            "  File \"/usr/local/lib/python3.11/dist-packages/streamlit/web/bootstrap.py\", line 347, in run\n",
+            "    if asyncio.get_running_loop().is_running():\n",
+            "       ^^^^^^^^^^^^^^^^^^^^^^^^^^\n",
+            "RuntimeError: no running event loop\n",
+            "\n",
+            "During handling of the above exception, another exception occurred:\n",
+            "\n",
+            "Traceback (most recent call last):\n",
+            "  File \"/usr/local/lib/python3.11/dist-packages/streamlit/watcher/local_sources_watcher.py\", line 217, in get_module_paths\n",
+            "    potential_paths = extract_paths(module)\n",
+            "                      ^^^^^^^^^^^^^^^^^^^^^\n",
+            "  File \"/usr/local/lib/python3.11/dist-packages/streamlit/watcher/local_sources_watcher.py\", line 210, in <lambda>\n",
+            "    lambda m: list(m.__path__._path),\n",
+            "                   ^^^^^^^^^^^^^^^^\n",
+            "  File \"/usr/local/lib/python3.11/dist-packages/torch/_classes.py\", line 13, in __getattr__\n",
+            "    proxy = torch._C._get_custom_class_python_wrapper(self.name, attr)\n",
+            "            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n",
+            "RuntimeError: Tried to instantiate class '__path__._path', but it does not exist! Ensure that it is registered via torch::class_\n",
+            "NLTK Punkt data checked/downloaded.\n",
+            "Database 'chat_feedback.db' initialized successfully.\n",
+            "2025-04-28 05:12:54.402 Examining the path of torch.classes raised:\n",
+            "Traceback (most recent call last):\n",
+            "  File \"/usr/local/lib/python3.11/dist-packages/streamlit/web/bootstrap.py\", line 347, in run\n",
+            "    if asyncio.get_running_loop().is_running():\n",
+            "       ^^^^^^^^^^^^^^^^^^^^^^^^^^\n",
+            "RuntimeError: no running event loop\n",
+            "\n",
+            "During handling of the above exception, another exception occurred:\n",
+            "\n",
+            "Traceback (most recent call last):\n",
+            "  File \"/usr/local/lib/python3.11/dist-packages/streamlit/watcher/local_sources_watcher.py\", line 217, in get_module_paths\n",
+            "    potential_paths = extract_paths(module)\n",
+            "                      ^^^^^^^^^^^^^^^^^^^^^\n",
+            "  File \"/usr/local/lib/python3.11/dist-packages/streamlit/watcher/local_sources_watcher.py\", line 210, in <lambda>\n",
+            "    lambda m: list(m.__path__._path),\n",
+            "                   ^^^^^^^^^^^^^^^^\n",
+            "  File \"/usr/local/lib/python3.11/dist-packages/torch/_classes.py\", line 13, in __getattr__\n",
+            "    proxy = torch._C._get_custom_class_python_wrapper(self.name, attr)\n",
+            "            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n",
+            "RuntimeError: Tried to instantiate class '__path__._path', but it does not exist! Ensure that it is registered via torch::class_\n",
+            "NLTK Punkt data checked/downloaded.\n",
+            "Database 'chat_feedback.db' initialized successfully.\n",
+            "NLTK Punkt data checked/downloaded.\n",
+            "Database 'chat_feedback.db' initialized successfully.\n",
+            "NLTK Punkt data checked/downloaded.\n",
+            "Database 'chat_feedback.db' initialized successfully.\n",
+            "NLTK loaded successfully.\n",
+            "NLTK Punkt data checked/downloaded.\n",
+            "Database 'chat_feedback.db' initialized successfully.\n",
+            "2025-04-28 05:16:04.670 Examining the path of torch.classes raised:\n",
+            "Traceback (most recent call last):\n",
+            "  File \"/usr/local/lib/python3.11/dist-packages/streamlit/web/bootstrap.py\", line 347, in run\n",
+            "    if asyncio.get_running_loop().is_running():\n",
+            "       ^^^^^^^^^^^^^^^^^^^^^^^^^^\n",
+            "RuntimeError: no running event loop\n",
+            "\n",
+            "During handling of the above exception, another exception occurred:\n",
+            "\n",
+            "Traceback (most recent call last):\n",
+            "  File \"/usr/local/lib/python3.11/dist-packages/streamlit/watcher/local_sources_watcher.py\", line 217, in get_module_paths\n",
+            "    potential_paths = extract_paths(module)\n",
+            "                      ^^^^^^^^^^^^^^^^^^^^^\n",
+            "  File \"/usr/local/lib/python3.11/dist-packages/streamlit/watcher/local_sources_watcher.py\", line 210, in <lambda>\n",
+            "    lambda m: list(m.__path__._path),\n",
+            "                   ^^^^^^^^^^^^^^^^\n",
+            "  File \"/usr/local/lib/python3.11/dist-packages/torch/_classes.py\", line 13, in __getattr__\n",
+            "    proxy = torch._C._get_custom_class_python_wrapper(self.name, attr)\n",
+            "            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n",
+            "RuntimeError: Tried to instantiate class '__path__._path', but it does not exist! Ensure that it is registered via torch::class_\n",
+            "NLTK Punkt data checked/downloaded.\n",
+            "Database 'chat_feedback.db' initialized successfully.\n",
+            "NLTK Punkt data checked/downloaded.\n",
+            "Database 'chat_feedback.db' initialized successfully.\n",
+            "NLTK Punkt data checked/downloaded.\n",
+            "Database 'chat_feedback.db' initialized successfully.\n",
+            "NLTK Punkt data checked/downloaded.\n",
+            "Database 'chat_feedback.db' initialized successfully.\n",
+            "NLTK Punkt data checked/downloaded.\n",
+            "Database 'chat_feedback.db' initialized successfully.\n",
+            "NLTK Punkt data checked/downloaded.\n",
+            "Database 'chat_feedback.db' initialized successfully.\n",
+            "2025-04-28 05:17:39.396 Examining the path of torch.classes raised:\n",
+            "Traceback (most recent call last):\n",
+            "  File \"/usr/local/lib/python3.11/dist-packages/streamlit/web/bootstrap.py\", line 347, in run\n",
+            "    if asyncio.get_running_loop().is_running():\n",
+            "       ^^^^^^^^^^^^^^^^^^^^^^^^^^\n",
+            "RuntimeError: no running event loop\n",
+            "\n",
+            "During handling of the above exception, another exception occurred:\n",
+            "\n",
+            "Traceback (most recent call last):\n",
+            "  File \"/usr/local/lib/python3.11/dist-packages/streamlit/watcher/local_sources_watcher.py\", line 217, in get_module_paths\n",
+            "    potential_paths = extract_paths(module)\n",
+            "                      ^^^^^^^^^^^^^^^^^^^^^\n",
+            "  File \"/usr/local/lib/python3.11/dist-packages/streamlit/watcher/local_sources_watcher.py\", line 210, in <lambda>\n",
+            "    lambda m: list(m.__path__._path),\n",
+            "                   ^^^^^^^^^^^^^^^^\n",
+            "  File \"/usr/local/lib/python3.11/dist-packages/torch/_classes.py\", line 13, in __getattr__\n",
+            "    proxy = torch._C._get_custom_class_python_wrapper(self.name, attr)\n",
+            "            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n",
+            "RuntimeError: Tried to instantiate class '__path__._path', but it does not exist! Ensure that it is registered via torch::class_\n",
+            "NLTK loaded successfully.\n",
+            "NLTK Punkt data checked/downloaded.\n",
+            "Database 'chat_feedback.db' initialized successfully.\n",
+            "2025-04-28 05:18:56.744 Examining the path of torch.classes raised:\n",
+            "Traceback (most recent call last):\n",
+            "  File \"/usr/local/lib/python3.11/dist-packages/streamlit/web/bootstrap.py\", line 347, in run\n",
+            "    if asyncio.get_running_loop().is_running():\n",
+            "       ^^^^^^^^^^^^^^^^^^^^^^^^^^\n",
+            "RuntimeError: no running event loop\n",
+            "\n",
+            "During handling of the above exception, another exception occurred:\n",
+            "\n",
+            "Traceback (most recent call last):\n",
+            "  File \"/usr/local/lib/python3.11/dist-packages/streamlit/watcher/local_sources_watcher.py\", line 217, in get_module_paths\n",
+            "    potential_paths = extract_paths(module)\n",
+            "                      ^^^^^^^^^^^^^^^^^^^^^\n",
+            "  File \"/usr/local/lib/python3.11/dist-packages/streamlit/watcher/local_sources_watcher.py\", line 210, in <lambda>\n",
+            "    lambda m: list(m.__path__._path),\n",
+            "                   ^^^^^^^^^^^^^^^^\n",
+            "  File \"/usr/local/lib/python3.11/dist-packages/torch/_classes.py\", line 13, in __getattr__\n",
+            "    proxy = torch._C._get_custom_class_python_wrapper(self.name, attr)\n",
+            "            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n",
+            "RuntimeError: Tried to instantiate class '__path__._path', but it does not exist! Ensure that it is registered via torch::class_\n",
+            "NLTK loaded successfully.\n",
+            "NLTK Punkt data checked/downloaded.\n",
+            "Database 'chat_feedback.db' initialized successfully.\n",
+            "2025-04-28 05:19:54.899 Examining the path of torch.classes raised:\n",
+            "Traceback (most recent call last):\n",
+            "  File \"/usr/local/lib/python3.11/dist-packages/streamlit/web/bootstrap.py\", line 347, in run\n",
+            "    if asyncio.get_running_loop().is_running():\n",
+            "       ^^^^^^^^^^^^^^^^^^^^^^^^^^\n",
+            "RuntimeError: no running event loop\n",
+            "\n",
+            "During handling of the above exception, another exception occurred:\n",
+            "\n",
+            "Traceback (most recent call last):\n",
+            "  File \"/usr/local/lib/python3.11/dist-packages/streamlit/watcher/local_sources_watcher.py\", line 217, in get_module_paths\n",
+            "    potential_paths = extract_paths(module)\n",
+            "                      ^^^^^^^^^^^^^^^^^^^^^\n",
+            "  File \"/usr/local/lib/python3.11/dist-packages/streamlit/watcher/local_sources_watcher.py\", line 210, in <lambda>\n",
+            "    lambda m: list(m.__path__._path),\n",
+            "                   ^^^^^^^^^^^^^^^^\n",
+            "  File \"/usr/local/lib/python3.11/dist-packages/torch/_classes.py\", line 13, in __getattr__\n",
+            "    proxy = torch._C._get_custom_class_python_wrapper(self.name, attr)\n",
+            "            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n",
+            "RuntimeError: Tried to instantiate class '__path__._path', but it does not exist! Ensure that it is registered via torch::class_\n",
+            "NLTK Punkt data checked/downloaded.\n",
+            "Database 'chat_feedback.db' initialized successfully.\n",
+            "NLTK Punkt data checked/downloaded.\n",
+            "Database 'chat_feedback.db' initialized successfully.\n",
+            "NLTK Punkt data checked/downloaded.\n",
+            "Database 'chat_feedback.db' initialized successfully.\n"
+          ]
+        }
+      ],
+      "source": [
+        "from pyngrok import ngrok\n",
+        "\n",
+        "public_url = ngrok.connect(8501).public_url\n",
+        "print(f\"公開URL: {public_url}\")\n",
+        "!streamlit run app.py"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "PljtbNsNuRrH"
+      },
+      "source": [
+        "アプリケーションの機能としては、チャット機能や履歴閲覧があります。\n",
+        "\n",
+        "これらの機能を実現するためには、StreamlitによるUI部分だけではなく、SQLiteを使用したチャット履歴の保存やLLMのモデルを呼び出した推論などの処理を組み合わせることで実現しています。\n",
+        "\n",
+        "- **`app.py`**: アプリケーションのエントリーポイント。チャット機能、履歴閲覧、サンプルデータ管理のUIを提供します。\n",
+        "- **`ui.py`**: チャットページや履歴閲覧ページなど、アプリケーションのUIロジックを管理します。\n",
+        "- **`llm.py`**: LLMモデルのロードとテキスト生成を行うモジュール。\n",
+        "- **`database.py`**: SQLiteデータベースを使用してチャット履歴やフィードバックを保存・管理します。\n",
+        "- **`metrics.py`**: BLEUスコアやコサイン類似度など、回答の評価指標を計算するモジュール。\n",
+        "- **`data.py`**: サンプルデータの作成やデータベースの初期化を行うモジュール。\n",
+        "- **`config.py`**: アプリケーションの設定（モデル名やデータベースファイル名）を管理します。\n",
+        "- **`requirements.txt`**: このアプリケーションを実行するために必要なPythonパッケージ。"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "Xvm8sWFPELSP"
+      },
+      "source": [
+        "後片付けとして、使う必要のないngrokのトンネルを削除します。"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "WFJC2TmZELSP"
+      },
+      "outputs": [],
+      "source": [
+        "from pyngrok import ngrok\n",
+        "ngrok.kill()"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "rUXhIzV7ELSP"
+      },
+      "source": [
+        "# 03_FastAPI\n",
+        "\n",
+        "ディレクトリ「03_FastAPI」に移動します。"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "4ejjDLxr3kfC"
+      },
+      "outputs": [],
+      "source": [
+        "%cd /content/lecture-ai-engineering/day1/03_FastAPI"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "f45TDsNzELSQ"
+      },
+      "source": [
+        "必要なライブラリをインストールします。"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "9uv6glCz5a7Z"
+      },
+      "outputs": [],
+      "source": [
+        "%%capture\n",
+        "!pip install -r requirements.txt"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "JfrmE2VmELSQ"
+      },
+      "source": [
+        "ngrokとhuggigfaceのトークンを使用して、認証を行います。"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "ELzWhMFORRIO"
+      },
+      "outputs": [],
+      "source": [
+        "!ngrok authtoken $$NGROK_TOKEN\n",
+        "!huggingface-cli login --token $$HUGGINGFACE_TOKEN"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "t-wztc2CELSQ"
+      },
+      "source": [
+        "アプリを起動します。\n",
+        "\n",
+        "「02_streamlit_app」から続けて「03_FastAPI」を実行している場合は、モデルのダウンロードが済んでいるため、すぐにサービスが立ち上がります。\n",
+        "\n",
+        "「03_FastAPI」のみを実行している場合は、初回の起動時にモデルのダウンロードが始まるので、モデルのダウンロードが終わるまで数分間待ちましょう。"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "meQ4SwISn3IQ"
+      },
+      "outputs": [],
+      "source": [
+        "!python app.py"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "RLubjIhbELSR"
+      },
+      "source": [
+        "FastAPIが起動すると、APIとクライアントが通信するためのURL（エンドポイント）が作られます。\n",
+        "\n",
+        "URLが作られるのと合わせて、Swagger UIというWebインターフェースが作られます。\n",
+        "\n",
+        "Swagger UIにアクセスすることで、APIの仕様を確認できたり、APIをテストすることができます。\n",
+        "\n",
+        "Swagger UIを利用することで、APIを通してLLMを動かしてみましょう。"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "XgumW3mGELSR"
+      },
+      "source": [
+        "後片付けとして、使う必要のないngrokのトンネルを削除します。"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "RJymTZio-WPJ"
+      },
+      "outputs": [],
+      "source": [
+        "from pyngrok import ngrok\n",
+        "ngrok.kill()"
+      ]
+    }
+  ],
+  "metadata": {
+    "colab": {
+      "provenance": [],
+      "gpuType": "T4"
+    },
+    "kernelspec": {
+      "display_name": "Python 3",
+      "name": "python3"
+    },
+    "language_info": {
+      "name": "python"
+    },
+    "accelerator": "GPU"
+  },
+  "nbformat": 4,
+  "nbformat_minor": 0
+}
